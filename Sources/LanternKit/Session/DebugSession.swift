@@ -22,6 +22,9 @@ public final class DebugSession {
     public private(set) var events: [DebugEvent] = []
     public var selectedFrame: Int = 0
 
+    /// The canvas model for Code Bubbles visualization.
+    public let canvasModel = CanvasModel()
+
     /// All breakpoints managed by the debugger.
     public var breakpoints: [Breakpoint] {
         debugger.breakpoints
@@ -100,12 +103,14 @@ public final class DebugSession {
         callStack = debugger.callStack()
         selectedFrame = 0
         refreshLocals()
+        updateCanvas()
     }
 
     fileprivate func handleResume() {
         isPaused = false
         pausedLocation = nil
         pauseReason = nil
+        canvasModel.dimAll()
     }
 
     fileprivate func handleError(_ error: InterpreterError) {
@@ -114,6 +119,12 @@ public final class DebugSession {
 
     fileprivate func handleEvent(_ event: DebugEvent) {
         events.append(event)
+    }
+
+    private func updateCanvas() {
+        canvasModel.update(from: callStack) { [debugger] frameIndex in
+            debugger.locals(frameIndex: frameIndex)
+        }
     }
 
     private func refreshLocals() {
