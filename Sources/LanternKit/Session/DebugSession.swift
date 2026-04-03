@@ -4,9 +4,9 @@ import LanternDebugger
 
 /// Observable wrapper over `DebuggerInterface` for SwiftUI.
 ///
-/// Implements `DebuggerDelegate` to receive VM-thread callbacks and
-/// publishes state on `@MainActor` for UI consumption. Uses the
-/// debugger's own breakpoint management — no separate store.
+/// The debugger delegate fires on the VM thread. We capture all inspection
+/// data (call stack, locals) on that thread while the VM is paused, then
+/// send the snapshots to @MainActor for display.
 @Observable
 @MainActor
 public final class DebugSession {
@@ -32,14 +32,15 @@ public final class DebugSession {
 
     // MARK: - Private
 
-    private let debugger: DebuggerInterface
+    // Internal access so the delegate adapter can query the debugger on the VM thread
+    let debugger: DebuggerInterface
     private let delegateAdapter: DebugDelegateAdapter
 
     // MARK: - Init
 
     public init(debugger: DebuggerInterface) {
         self.debugger = debugger
-        self.delegateAdapter = DebugDelegateAdapter()
+        self.delegateAdapter = DebugDelegateAdapter(debugger: debugger)
         self.delegateAdapter.session = self
         debugger.delegate = delegateAdapter
     }
@@ -91,18 +92,25 @@ public final class DebugSession {
     /// Update inspection state for the selected frame.
     public func selectFrame(_ index: Int) {
         selectedFrame = index
-        refreshLocals()
+        // Re-fetch locals for the new frame from the debugger
+        // (only valid while paused — the debugger holds state)
+        if isPaused {
+            currentLocals = debugger.locals(frameIndex: index)
+            currentCaptures = debugger.captures(frameIndex: index)
+        }
     }
 
-    // MARK: - Internal
+    // MARK: - Internal (called from delegate adapter)
 
-    fileprivate func handlePause(at location: SourceLocation, reason: PauseReason) {
+    /// Called with data captured on the VM thread while paused.
+    fileprivate func applyPauseSnapshot(_ snapshot: PauseSnapshot) {
         isPaused = true
-        pausedLocation = location
-        pauseReason = reason
-        callStack = debugger.callStack()
+        pausedLocation = snapshot.location
+        pauseReason = snapshot.reason
+        callStack = snapshot.callStack
         selectedFrame = 0
-        refreshLocals()
+        currentLocals = snapshot.locals
+        currentCaptures = snapshot.captures
         updateCanvas()
     }
 
@@ -110,6 +118,9 @@ public final class DebugSession {
         isPaused = false
         pausedLocation = nil
         pauseReason = nil
+        callStack = []
+        currentLocals = []
+        currentCaptures = []
         canvasModel.dimAll()
     }
 
@@ -122,35 +133,60 @@ public final class DebugSession {
     }
 
     private func updateCanvas() {
-        canvasModel.update(from: callStack) { [debugger] frameIndex in
-            debugger.locals(frameIndex: frameIndex)
+        // Use the already-captured call stack data, don't re-query the debugger
+        var localsMap: [Int: [VariableInfo]] = [:]
+        localsMap[0] = currentLocals
+        canvasModel.update(from: callStack) { frameIndex in
+            localsMap[frameIndex] ?? []
         }
     }
+}
 
-    private func refreshLocals() {
-        guard isPaused else {
-            currentLocals = []
-            currentCaptures = []
-            return
-        }
-        currentLocals = debugger.locals(frameIndex: selectedFrame)
-        currentCaptures = debugger.captures(frameIndex: selectedFrame)
-    }
+// MARK: - Pause Snapshot
+
+/// All inspection data captured on the VM thread while the VM is paused.
+/// This is sent to @MainActor so we don't need to query the debugger
+/// from the wrong thread.
+struct PauseSnapshot: Sendable {
+    let location: SourceLocation
+    let reason: PauseReason
+    let callStack: [FrameInfo]
+    let locals: [VariableInfo]
+    let captures: [VariableInfo]
 }
 
 // MARK: - Delegate Adapter
 
 /// Bridges DebuggerDelegate (called on VM thread) to DebugSession (@MainActor).
 ///
-/// We use a separate class because DebuggerDelegate requires AnyObject conformance
-/// and the delegate is called on the VM thread, not MainActor.
+/// Captures all inspection data on the VM thread while paused, then
+/// sends the snapshot to MainActor. This avoids cross-thread debugger queries.
 private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable {
     weak var session: DebugSession?
+    // Own reference to debugger for VM-thread queries (avoids MainActor crossing)
+    let debugger: DebuggerInterface
+
+    init(debugger: DebuggerInterface) {
+        self.debugger = debugger
+    }
 
     func debuggerDidPause(at location: SourceLocation, reason: PauseReason) {
+        // Capture everything NOW, on the VM thread, while the VM is actually paused
+        let stack = debugger.callStack()
+        let locals = debugger.locals(frameIndex: 0)
+        let captures = debugger.captures(frameIndex: 0)
+
+        let snapshot = PauseSnapshot(
+            location: location,
+            reason: reason,
+            callStack: stack,
+            locals: locals,
+            captures: captures
+        )
+
         let session = session
         Task { @MainActor in
-            session?.handlePause(at: location, reason: reason)
+            session?.applyPauseSnapshot(snapshot)
         }
     }
 
