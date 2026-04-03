@@ -9,10 +9,20 @@ import LanternDebugger
 public struct VariablesPanel: View {
     let locals: [VariableInfo]
     let captures: [VariableInfo]
+    let globals: [VariableInfo]
 
-    public init(locals: [VariableInfo], captures: [VariableInfo] = []) {
+    public init(
+        locals: [VariableInfo],
+        captures: [VariableInfo] = [],
+        globals: [VariableInfo] = []
+    ) {
         self.locals = locals
         self.captures = captures
+        self.globals = globals
+    }
+
+    private var hasAny: Bool {
+        !locals.isEmpty || !captures.isEmpty || !globals.isEmpty
     }
 
     public var body: some View {
@@ -31,7 +41,14 @@ public struct VariablesPanel: View {
                     }
                 }
             }
-            if locals.isEmpty && captures.isEmpty {
+            if !globals.isEmpty {
+                Section("Globals") {
+                    ForEach(globals, id: \.name) { variable in
+                        VariableRow(variable: variable)
+                    }
+                }
+            }
+            if !hasAny {
                 ContentUnavailableView(
                     "No Variables",
                     systemImage: "xmark.circle",

@@ -19,6 +19,7 @@ public final class DebugSession {
     public private(set) var callStack: [FrameInfo] = []
     public private(set) var currentLocals: [VariableInfo] = []
     public private(set) var currentCaptures: [VariableInfo] = []
+    public private(set) var currentGlobals: [VariableInfo] = []
     public private(set) var events: [DebugEvent] = []
     public var selectedFrame: Int = 0
 
@@ -117,6 +118,7 @@ public final class DebugSession {
         selectedFrame = 0
         currentLocals = snapshot.locals
         currentCaptures = snapshot.captures
+        currentGlobals = snapshot.globals
         updateCanvas()
         onPause?()
     }
@@ -128,6 +130,7 @@ public final class DebugSession {
         callStack = []
         currentLocals = []
         currentCaptures = []
+        currentGlobals = []
         canvasModel.dimAll()
         onResume?()
     }
@@ -161,6 +164,7 @@ struct PauseSnapshot: Sendable {
     let callStack: [FrameInfo]
     let locals: [VariableInfo]
     let captures: [VariableInfo]
+    let globals: [VariableInfo]
 }
 
 // MARK: - Delegate Adapter
@@ -183,13 +187,15 @@ private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable 
         let stack = debugger.callStack()
         let locals = debugger.locals(frameIndex: 0)
         let captures = debugger.captures(frameIndex: 0)
+        let globals = debugger.globals()
 
         let snapshot = PauseSnapshot(
             location: location,
             reason: reason,
             callStack: stack,
             locals: locals,
-            captures: captures
+            captures: captures,
+            globals: globals
         )
 
         let session = session
