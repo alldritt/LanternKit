@@ -61,7 +61,11 @@ public final class SessionController {
         interp.outputHandler = handler
         self.interpreter = interp
         self._outputHandler = handler
-        self.debugSession = DebugSession(debugger: interp.debugger)
+
+        // Snapshot built-in global names so we can filter them out of variable display
+        let builtinNames = Set(interp.debugger.globals().map(\.name))
+
+        self.debugSession = DebugSession(debugger: interp.debugger, builtinGlobalNames: builtinNames)
         self.debugSession.onPause = { [weak self] in self?.state = .paused }
         self.debugSession.onResume = { [weak self] in
             guard let self, self.state == .paused else { return }

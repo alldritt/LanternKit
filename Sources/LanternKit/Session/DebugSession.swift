@@ -42,12 +42,15 @@ public final class DebugSession {
     // Internal access so the delegate adapter can query the debugger on the VM thread
     let debugger: DebuggerInterface
     private let delegateAdapter: DebugDelegateAdapter
+    /// Names of built-in globals to exclude from variable display.
+    let builtinGlobalNames: Set<String>
 
     // MARK: - Init
 
-    public init(debugger: DebuggerInterface) {
+    public init(debugger: DebuggerInterface, builtinGlobalNames: Set<String> = []) {
         self.debugger = debugger
-        self.delegateAdapter = DebugDelegateAdapter(debugger: debugger)
+        self.builtinGlobalNames = builtinGlobalNames
+        self.delegateAdapter = DebugDelegateAdapter(debugger: debugger, builtinGlobalNames: builtinGlobalNames)
         self.delegateAdapter.session = self
         debugger.delegate = delegateAdapter
     }
@@ -175,11 +178,12 @@ struct PauseSnapshot: Sendable {
 /// sends the snapshot to MainActor. This avoids cross-thread debugger queries.
 private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable {
     weak var session: DebugSession?
-    // Own reference to debugger for VM-thread queries (avoids MainActor crossing)
     let debugger: DebuggerInterface
+    let builtinGlobalNames: Set<String>
 
-    init(debugger: DebuggerInterface) {
+    init(debugger: DebuggerInterface, builtinGlobalNames: Set<String>) {
         self.debugger = debugger
+        self.builtinGlobalNames = builtinGlobalNames
     }
 
     func debuggerDidPause(at location: SourceLocation, reason: PauseReason) {
@@ -187,7 +191,8 @@ private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable 
         let stack = debugger.callStack()
         let locals = debugger.locals(frameIndex: 0)
         let captures = debugger.captures(frameIndex: 0)
-        let globals = debugger.globals()
+        // Filter out built-in globals (print, min, max, String, Double, etc.)
+        let globals = debugger.globals().filter { !builtinGlobalNames.contains($0.name) }
 
         let snapshot = PauseSnapshot(
             location: location,
