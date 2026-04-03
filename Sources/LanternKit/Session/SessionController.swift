@@ -45,6 +45,11 @@ public final class SessionController {
     /// The underlying interpreter.
     public let interpreter: Interpreter
 
+    /// Access to the VM for setting step mode before execution.
+    private var vm: VM? {
+        (interpreter.debugger as? Debugger)?.vm
+    }
+
     private var runTask: Task<Void, Never>?
     private var recompileTask: Task<Void, Never>?
 
@@ -57,6 +62,11 @@ public final class SessionController {
         self.interpreter = interp
         self._outputHandler = handler
         self.debugSession = DebugSession(debugger: interp.debugger)
+        self.debugSession.onPause = { [weak self] in self?.state = .paused }
+        self.debugSession.onResume = { [weak self] in
+            guard let self, self.state == .paused else { return }
+            self.state = .running
+        }
     }
 
     // MARK: - Output Handling
@@ -68,35 +78,36 @@ public final class SessionController {
     /// Compile and run to completion. Breakpoints are honoured.
     public func run(source: String, fileName: String = "<input>") {
         prepareForRun()
-
         guard let program = compile(source: source, fileName: fileName) else { return }
-
         state = .running
         execute(program: program)
     }
 
-    /// Compile and immediately pause before the first statement.
-    /// Use when stepping from idle.
+    /// Step over one statement. From idle: compile and pause at first statement.
     public func stepOver(source: String, fileName: String = "<input>") {
         if state == .paused {
             debugSession.stepOver()
             return
         }
         prepareForRun()
-        guard compile(source: source, fileName: fileName) != nil else { return }
-        // The debugger will step and pause at the first statement
-        debugSession.stepOver()
+        guard let program = compile(source: source, fileName: fileName) else { return }
+        // Set step mode BEFORE execution so the VM pauses at the first statement
+        vm?.stepMode = .into(sourceLine: 0)
+        state = .running
+        execute(program: program)
     }
 
-    /// Step into from current position, or compile and step into first call.
+    /// Step into. From idle: compile and pause at first statement.
     public func stepInto(source: String, fileName: String = "<input>") {
         if state == .paused {
             debugSession.stepInto()
             return
         }
         prepareForRun()
-        guard compile(source: source, fileName: fileName) != nil else { return }
-        debugSession.stepInto()
+        guard let program = compile(source: source, fileName: fileName) else { return }
+        vm?.stepMode = .into(sourceLine: 0)
+        state = .running
+        execute(program: program)
     }
 
     /// Step out of current function.
@@ -211,7 +222,6 @@ public final class SessionController {
             detectedViewTypeName = nil
             return
         }
-
         let viewTypes = program.typeTable.filter { $0.conformances.contains("View") }
         guard let viewType = viewTypes.first else {
             previewView = nil
@@ -219,7 +229,6 @@ public final class SessionController {
             detectedViewTypeName = nil
             return
         }
-
         detectedViewTypeName = viewType.name
         previewView = nil
         viewDescriptor = nil

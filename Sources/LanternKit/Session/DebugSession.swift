@@ -25,6 +25,12 @@ public final class DebugSession {
     /// The canvas model for Code Bubbles visualization.
     public let canvasModel = CanvasModel()
 
+    /// Called when the debugger pauses. Used by SessionController to update state.
+    public var onPause: (() -> Void)?
+
+    /// Called when the debugger resumes. Used by SessionController to update state.
+    public var onResume: (() -> Void)?
+
     /// All breakpoints managed by the debugger.
     public var breakpoints: [Breakpoint] {
         debugger.breakpoints
@@ -112,6 +118,7 @@ public final class DebugSession {
         currentLocals = snapshot.locals
         currentCaptures = snapshot.captures
         updateCanvas()
+        onPause?()
     }
 
     fileprivate func handleResume() {
@@ -122,6 +129,7 @@ public final class DebugSession {
         currentLocals = []
         currentCaptures = []
         canvasModel.dimAll()
+        onResume?()
     }
 
     fileprivate func handleError(_ error: InterpreterError) {
