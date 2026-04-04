@@ -21,14 +21,29 @@ public enum BreakpointMapper {
         }
     }
 
-    /// Convert debugger call stack frames to gutter stack frame annotations.
+    /// Build stack frame annotations from the paused location and call stack.
     ///
-    /// Frames without a source location or with line 0 are filtered out.
+    /// The paused location (depth 0, top frame) always comes from `pausedLocation`,
+    /// which is set even at the top level of a script where there are no call stack frames.
+    /// Additional caller frames come from `callStack` at depth 1+.
     ///
-    public static func mapStackFrames(_ frames: [FrameInfo]) -> [GutterStackFrame] {
-        frames.enumerated().compactMap { (index, frame) in
-            guard let loc = frame.sourceLocation, loc.line > 0 else { return nil }
-            return GutterStackFrame(line: Int(loc.line), depth: index)
+    public static func mapPausedState(pausedLocation: SourceLocation?,
+                                      callStack: [FrameInfo]) -> [GutterStackFrame]
+    {
+        var result: [GutterStackFrame] = []
+
+        // Current statement indicator from pausedLocation (always present when paused)
+        if let loc = pausedLocation, loc.line > 0 {
+            result.append(GutterStackFrame(line: Int(loc.line), depth: 0))
         }
+
+        // Caller frames from the call stack (depth 1+, skipping the top frame
+        // since pausedLocation already covers it)
+        for (index, frame) in callStack.dropFirst().enumerated() {
+            guard let loc = frame.sourceLocation, loc.line > 0 else { continue }
+            result.append(GutterStackFrame(line: Int(loc.line), depth: index + 1))
+        }
+
+        return result
     }
 }
