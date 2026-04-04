@@ -1,68 +1,113 @@
 import SwiftUI
+import LanternVM
 import LanternSwiftUI
 
-/// Hosts the live SwiftUI preview of an interpreted view.
+/// Displays the result of script execution in the preview panel.
 ///
-/// Shows the ViewStub produced by the SessionController inside a PreviewChrome.
-/// When no preview is available, shows a placeholder with detection status.
+/// The preview model is simple: whatever value the script produces is displayed.
+/// - SwiftUI views (ViewBox host objects) are rendered live inside PreviewChrome
+/// - Scalar values (strings, numbers, bools) are shown as formatted text
+/// - Void/nil results show a "no result" placeholder
+/// - Errors show the error message
 public struct PreviewCanvasView: View {
-    let previewView: ViewStub?
-    let detectedTypeName: String?
-    let hasError: Bool
+    let result: Value?
+    let error: String?
 
-    public init(
-        previewView: ViewStub?,
-        detectedTypeName: String?,
-        hasError: Bool = false
-    ) {
-        self.previewView = previewView
-        self.detectedTypeName = detectedTypeName
-        self.hasError = hasError
+    public init(result: Value?, error: String? = nil) {
+        self.result = result
+        self.error = error
     }
 
     public var body: some View {
         Group {
-            if let previewView {
-                PreviewChrome {
-                    AnyView(previewView)
-                }
-                .opacity(hasError ? 0.5 : 1.0)
-                .overlay(alignment: .topTrailing) {
-                    if hasError {
-                        outdatedBadge
-                    }
-                }
-            } else if let typeName = detectedTypeName {
-                pendingPreview(typeName: typeName)
+            if let error {
+                errorView(error)
+            } else if let result {
+                resultView(result)
             } else {
-                noPreview
+                noResult
             }
         }
     }
 
-    private var noPreview: some View {
-        ContentUnavailableView(
-            "No Preview",
-            systemImage: "rectangle.dashed",
-            description: Text("Run a script that defines a View to see a live preview.")
-        )
-    }
+    // MARK: - Result Display
 
-    private func pendingPreview(typeName: String) -> some View {
-        ContentUnavailableView {
-            Label(typeName, systemImage: "rectangle.dashed")
-        } description: {
-            Text("View type detected. Preview rendering requires Lantern view evaluation support.")
+    @ViewBuilder
+    private func resultView(_ value: Value) -> some View {
+        switch value {
+        case .hostObject(let ref) where ref.object is ViewBox:
+            // SwiftUI view — render live in device chrome
+            PreviewChrome {
+                (ref.object as! ViewBox).view
+            }
+
+        case .void, .nil_:
+            noResult
+
+        case .string(let s):
+            scalarView(s, typeName: "String", icon: "text.quote")
+
+        case .int(let n):
+            scalarView("\(n)", typeName: "Int", icon: "number")
+
+        case .double(let d):
+            scalarView("\(d)", typeName: "Double", icon: "number")
+
+        case .bool(let b):
+            scalarView("\(b)", typeName: "Bool", icon: b ? "checkmark.circle" : "xmark.circle")
+
+        case .array(let arr):
+            scalarView("\(arr.count) elements", typeName: "Array", icon: "list.bullet")
+
+        case .dictionary(let dict):
+            scalarView("\(dict.count) entries", typeName: "Dictionary", icon: "list.bullet.indent")
+
+        case .instance(let ref):
+            scalarView(ref.typeName, typeName: "Instance", icon: "cube")
+
+        default:
+            scalarView(value.description, typeName: value.typeName, icon: "square.and.pencil")
         }
     }
 
-    private var outdatedBadge: some View {
-        Text("Outdated")
-            .font(.caption2.bold())
-            .foregroundStyle(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.orange, in: Capsule())
-            .padding(8)
+    // MARK: - Subviews
+
+    private func scalarView(_ text: String, typeName: String, icon: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.system(.title2, design: .monospaced))
+                .foregroundStyle(.primary)
+            Text(typeName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(white: 0.95))
+    }
+
+    private var noResult: some View {
+        ContentUnavailableView(
+            "No Result",
+            systemImage: "rectangle.dashed",
+            description: Text("Run a script to see its result here.\nThe last expression value is displayed.")
+        )
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.largeTitle)
+                .foregroundStyle(.red)
+            Text(message)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.red)
+                .multilineTextAlignment(.center)
+                .padding()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(white: 0.95))
     }
 }

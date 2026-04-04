@@ -9,6 +9,17 @@ import LanternSwiftUI
 ///
 /// One `SessionController` per document. The debugger is always active —
 /// breakpoints work in every run, and stepping is always available.
+///
+/// **Preview model:** The preview panel displays whatever value the script
+/// produces as its result. If the result is a SwiftUI view (ViewBox), it's
+/// rendered live. If it's a scalar value, it's displayed as formatted text.
+/// This means the script controls what gets previewed:
+///
+///     Text("Hello!")              // previews a Text view
+///     struct MyView: View { ... }
+///     MyView()                    // previews MyView
+///     fibonacci(10)               // previews "55"
+///
 @Observable
 @MainActor
 public final class SessionController {
@@ -28,13 +39,25 @@ public final class SessionController {
     public private(set) var consoleOutput: String = ""
     public private(set) var diagnostics: CompilerDiagnostics?
     public private(set) var currentProgram: CompiledProgram?
+
+    /// The result of the last execution.
     public private(set) var lastResult: Value?
 
-    // MARK: - Preview
+    /// The value to display in the preview panel.
+    /// When paused: the result of the last executed statement.
+    /// When finished: the script's final result.
+    /// Otherwise: nil.
+    public var previewValue: Value? {
+        switch state {
+        case .paused:
+            return debugSession.lastStatementResult
+        case .finished:
+            return lastResult
+        default:
+            return lastResult // Keep showing last result while idle
+        }
+    }
 
-    public private(set) var previewView: ViewStub?
-    public private(set) var viewDescriptor: ViewDescriptor?
-    public private(set) var detectedViewTypeName: String?
     public var liveReloadEnabled: Bool = true
 
     // MARK: - Debugging
@@ -62,7 +85,6 @@ public final class SessionController {
         self.interpreter = interp
         self._outputHandler = handler
 
-        // Snapshot built-in global names so we can filter them out of variable display
         let builtinNames = Set(interp.debugger.globals().map(\.name))
 
         self.debugSession = DebugSession(debugger: interp.debugger, builtinGlobalNames: builtinNames)
@@ -95,7 +117,6 @@ public final class SessionController {
         }
         prepareForRun()
         guard let program = compile(source: source, fileName: fileName) else { return }
-        // Set step mode BEFORE execution so the VM pauses at the first statement
         vm?.stepMode = .into(sourceLine: 0)
         state = .running
         execute(program: program)
@@ -171,7 +192,6 @@ public final class SessionController {
             return nil
         case .success(let program):
             self.currentProgram = program
-            detectAndCreatePreview()
             return program
         }
     }
@@ -198,63 +218,21 @@ public final class SessionController {
                 self.consoleOutput += "\n\(error)\n"
                 self.state = .error
             }
-
-            self.detectAndCreatePreview()
         }
 
         startOutputPolling()
     }
 
-    // MARK: - Preview
-
-    public func runWithPreview(source: String, fileName: String = "<input>") {
-        run(source: source, fileName: fileName)
-    }
+    // MARK: - Live Reload
 
     public func scheduleRecompile(source: String, fileName: String = "<input>") {
         guard liveReloadEnabled else { return }
+        guard state == .idle || state == .finished || state == .error else { return }
         recompileTask?.cancel()
         recompileTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            self.recompile(source: source, fileName: fileName)
-        }
-    }
-
-    private func detectAndCreatePreview() {
-        guard let program = currentProgram else {
-            previewView = nil
-            viewDescriptor = nil
-            detectedViewTypeName = nil
-            return
-        }
-        let viewTypes = program.typeTable.filter { $0.conformances.contains("View") }
-        guard let viewType = viewTypes.first else {
-            previewView = nil
-            viewDescriptor = nil
-            detectedViewTypeName = nil
-            return
-        }
-        detectedViewTypeName = viewType.name
-
-        if let instance = interpreter.createInstance(typeName: viewType.name) {
-            previewView = interpreter.makeView(from: instance)
-            viewDescriptor = interpreter.currentViewDescriptor
-        } else {
-            previewView = nil
-            viewDescriptor = nil
-        }
-    }
-
-    private func recompile(source: String, fileName: String) {
-        let result = interpreter.compile(source: source, fileName: fileName)
-        switch result {
-        case .failure(let diags):
-            self.diagnostics = diags
-        case .success(let program):
-            self.diagnostics = nil
-            self.currentProgram = program
-            detectAndCreatePreview()
+            self.run(source: source, fileName: fileName)
         }
     }
 

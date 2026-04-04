@@ -21,6 +21,9 @@ public final class DebugSession {
     public private(set) var currentCaptures: [VariableInfo] = []
     public private(set) var currentGlobals: [VariableInfo] = []
     public private(set) var events: [DebugEvent] = []
+
+    /// The result of the last executed statement (top of VM stack when paused).
+    public private(set) var lastStatementResult: Value?
     public var selectedFrame: Int = 0
 
     /// The canvas model for Code Bubbles visualization.
@@ -122,6 +125,7 @@ public final class DebugSession {
         currentLocals = snapshot.locals
         currentCaptures = snapshot.captures
         currentGlobals = snapshot.globals
+        lastStatementResult = snapshot.topOfStack
         updateCanvas()
         onPause?()
     }
@@ -168,6 +172,7 @@ struct PauseSnapshot: Sendable {
     let locals: [VariableInfo]
     let captures: [VariableInfo]
     let globals: [VariableInfo]
+    let topOfStack: Value?
 }
 
 // MARK: - Delegate Adapter
@@ -191,8 +196,10 @@ private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable 
         let stack = debugger.callStack()
         let locals = debugger.locals(frameIndex: 0)
         let captures = debugger.captures(frameIndex: 0)
-        // Filter out built-in globals (print, min, max, String, Double, etc.)
         let globals = debugger.globals().filter { !builtinGlobalNames.contains($0.name) }
+
+        // Capture the top of the VM stack — the result of the last executed expression
+        let topOfStack: Value? = (debugger as? Debugger)?.vm.stackSnapshot.last
 
         let snapshot = PauseSnapshot(
             location: location,
@@ -200,7 +207,8 @@ private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable 
             callStack: stack,
             locals: locals,
             captures: captures,
-            globals: globals
+            globals: globals,
+            topOfStack: topOfStack
         )
 
         let session = session
