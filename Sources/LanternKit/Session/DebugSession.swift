@@ -36,9 +36,7 @@ public final class DebugSession {
     public var onResume: (() -> Void)?
 
     /// All breakpoints managed by the debugger.
-    public var breakpoints: [Breakpoint] {
-        debugger.breakpoints
-    }
+    public private(set) var breakpoints: [Breakpoint] = []
 
     // MARK: - Private
 
@@ -75,23 +73,35 @@ public final class DebugSession {
             return false
         }) {
             debugger.removeBreakpoint(existing.id)
+            syncBreakpoints()
             return nil
         } else {
-            return debugger.addBreakpoint(file: file, line: line, condition: nil)
+            let bp = debugger.addBreakpoint(file: file, line: line, condition: nil)
+            syncBreakpoints()
+            return bp
         }
     }
 
     @discardableResult
     public func addBreakpoint(file: String, line: Int, condition: String? = nil) -> Breakpoint {
-        debugger.addBreakpoint(file: file, line: line, condition: condition)
+        let bp = debugger.addBreakpoint(file: file, line: line, condition: condition)
+        syncBreakpoints()
+        return bp
     }
 
     public func removeBreakpoint(_ id: UUID) {
         debugger.removeBreakpoint(id)
+        syncBreakpoints()
     }
 
     public func enableBreakpoint(_ id: UUID, enabled: Bool) {
         debugger.enableBreakpoint(id, enabled: enabled)
+        syncBreakpoints()
+    }
+
+    /// Sync the stored breakpoints array from the debugger so @Observable picks up changes.
+    private func syncBreakpoints() {
+        breakpoints = debugger.breakpoints
     }
 
     public var isBreakOnExceptions: Bool {
