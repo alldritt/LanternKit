@@ -199,7 +199,6 @@ public final class SessionController {
                 self.state = .error
             }
 
-            // Detect preview after execution (constructors now available in VM)
             self.detectAndCreatePreview()
         }
 
