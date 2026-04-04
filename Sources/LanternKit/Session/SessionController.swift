@@ -198,6 +198,9 @@ public final class SessionController {
                 self.consoleOutput += "\n\(error)\n"
                 self.state = .error
             }
+
+            // Detect preview after execution (constructors now available in VM)
+            self.detectAndCreatePreview()
         }
 
         startOutputPolling()
@@ -234,8 +237,15 @@ public final class SessionController {
             return
         }
         detectedViewTypeName = viewType.name
-        previewView = nil
-        viewDescriptor = nil
+
+        // Create instance and ViewStub using the real Lantern SwiftUI bridge
+        if let instance = interpreter.createInstance(typeName: viewType.name) {
+            previewView = interpreter.makeView(from: instance)
+            viewDescriptor = interpreter.currentViewDescriptor
+        } else {
+            previewView = nil
+            viewDescriptor = nil
+        }
     }
 
     private func recompile(source: String, fileName: String) {
