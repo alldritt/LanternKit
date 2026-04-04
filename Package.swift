@@ -13,7 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Lantern"),
-        .package(url: "https://github.com/mchakravarty/CodeEditorView.git", from: "0.12.0"),
+        .package(path: "../CodeEditorView"),
     ],
     targets: [
         .target(

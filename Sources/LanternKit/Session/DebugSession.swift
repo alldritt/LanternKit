@@ -90,6 +90,10 @@ public final class DebugSession {
         debugger.removeBreakpoint(id)
     }
 
+    public func enableBreakpoint(_ id: UUID, enabled: Bool) {
+        debugger.enableBreakpoint(id, enabled: enabled)
+    }
+
     public var isBreakOnExceptions: Bool {
         get { debugger.isBreakOnExceptions }
         set { debugger.isBreakOnExceptions = newValue }
