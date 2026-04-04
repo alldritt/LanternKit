@@ -238,7 +238,6 @@ public final class SessionController {
         }
         detectedViewTypeName = viewType.name
 
-        // Create instance and ViewStub using the real Lantern SwiftUI bridge
         if let instance = interpreter.createInstance(typeName: viewType.name) {
             previewView = interpreter.makeView(from: instance)
             viewDescriptor = interpreter.currentViewDescriptor
