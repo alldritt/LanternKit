@@ -13,6 +13,8 @@ public struct PreviewCanvasView: View {
     let result: Value?
     let error: String?
 
+    @State private var canvasState = PreviewCanvasState()
+
     public init(result: Value?, error: String? = nil) {
         self.result = result
         self.error = error
@@ -36,10 +38,8 @@ public struct PreviewCanvasView: View {
     private func resultView(_ value: Value) -> some View {
         switch value {
         case .hostObject(let ref) where ref.object is ViewBox:
-            // SwiftUI view — render live in device chrome
-            PreviewChrome {
-                (ref.object as! ViewBox).view
-            }
+            // SwiftUI view — render live in zoomable device canvas
+            viewPreview { (ref.object as! ViewBox).view }
 
         case .void, .nil_:
             noResult
@@ -67,6 +67,44 @@ public struct PreviewCanvasView: View {
 
         default:
             scalarView(value.description, typeName: value.typeName, icon: "square.and.pencil")
+        }
+    }
+
+    // MARK: - View Preview Canvas
+
+    @State private var canvasSize: CGSize = .zero
+
+    private func viewPreview<V: View>(@ViewBuilder content: @escaping () -> V) -> some View {
+        VStack(spacing: 0) {
+            ZoomableCanvas(scale: $canvasState.scale, offset: $canvasState.panOffset,
+                          contentSize: canvasState.estimatedContentSize) {
+                if canvasState.variantMode == .none {
+                    PreviewDeviceFrame(
+                        devicePreset: canvasState.devicePreset,
+                        colorScheme: canvasState.colorScheme,
+                        dynamicTypeSize: canvasState.dynamicTypeSize,
+                        layoutDirection: canvasState.layoutDirection,
+                        orientation: canvasState.orientation
+                    ) { content() }
+                } else {
+                    PreviewVariantsGrid(state: canvasState) { content() }
+                }
+            }
+            .onGeometryChange(for: CGSize.self) { geo in geo.size } action: { newSize in
+                if canvasSize == .zero {
+                    // Initial layout — auto-fit
+                    canvasState.zoomToFit(availableSize: newSize)
+                }
+                canvasSize = newSize
+            }
+            .onChange(of: canvasState.variantMode) {
+                canvasState.zoomToFit(availableSize: canvasSize)
+            }
+            .onChange(of: canvasState.devicePreset) {
+                canvasState.zoomToFit(availableSize: canvasSize)
+            }
+            Divider()
+            PreviewToolbar(state: canvasState, availableSize: canvasSize)
         }
     }
 

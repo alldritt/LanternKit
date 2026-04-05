@@ -68,11 +68,6 @@ public final class SessionController {
     /// The underlying interpreter.
     public let interpreter: Interpreter
 
-    /// Access to the VM for setting step mode before execution.
-    private var vm: VM? {
-        (interpreter.debugger as? Debugger)?.vm
-    }
-
     private var runTask: Task<Void, Never>?
     private var recompileTask: Task<Void, Never>?
 
@@ -117,9 +112,8 @@ public final class SessionController {
         }
         prepareForRun()
         guard let program = compile(source: source, fileName: fileName) else { return }
-        vm?.stepMode = .into(sourceLine: 0)
         state = .running
-        execute(program: program)
+        executePaused(program: program)
     }
 
     /// Step into. From idle: compile and pause at first statement.
@@ -130,9 +124,8 @@ public final class SessionController {
         }
         prepareForRun()
         guard let program = compile(source: source, fileName: fileName) else { return }
-        vm?.stepMode = .into(sourceLine: 0)
         state = .running
-        execute(program: program)
+        executePaused(program: program)
     }
 
     /// Step out of current function.
@@ -214,6 +207,36 @@ public final class SessionController {
             case .success(let value):
                 self.lastResult = value
                 self.state = .finished
+            case .failure(let error):
+                self.consoleOutput += "\n\(error)\n"
+                self.state = .error
+            }
+        }
+
+        startOutputPolling()
+    }
+
+    private func executePaused(program: CompiledProgram) {
+        nonisolated(unsafe) let interp = interpreter
+        let outputHandler = _outputHandler
+
+        runTask = Task {
+            let execResult = await Task.detached {
+                interp.executePaused(program: program)
+            }.value
+
+            let buffered = outputHandler.drain()
+            if !buffered.isEmpty {
+                self.consoleOutput += buffered
+            }
+
+            switch execResult {
+            case .success(let value):
+                // If paused, the delegate already set state to .paused
+                if self.state != .paused {
+                    self.lastResult = value
+                    self.state = .finished
+                }
             case .failure(let error):
                 self.consoleOutput += "\n\(error)\n"
                 self.state = .error

@@ -1,26 +1,5 @@
 import SwiftUI
 
-/// Device size presets for the preview canvas.
-public enum DevicePreset: String, CaseIterable, Identifiable {
-    case iPhoneSE = "iPhone SE"
-    case iPhone16 = "iPhone 16"
-    case iPhone16Pro = "iPhone 16 Pro Max"
-    case iPadMini = "iPad mini"
-    case iPad = "iPad"
-
-    public var id: String { rawValue }
-
-    public var size: CGSize {
-        switch self {
-        case .iPhoneSE: CGSize(width: 375, height: 667)
-        case .iPhone16: CGSize(width: 393, height: 852)
-        case .iPhone16Pro: CGSize(width: 430, height: 932)
-        case .iPadMini: CGSize(width: 744, height: 1133)
-        case .iPad: CGSize(width: 820, height: 1180)
-        }
-    }
-}
-
 /// Wraps preview content with device frame and environment controls.
 ///
 /// Provides toggles for color scheme, dynamic type, device size,

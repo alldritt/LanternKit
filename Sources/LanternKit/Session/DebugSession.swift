@@ -212,8 +212,8 @@ private final class DebugDelegateAdapter: DebuggerDelegate, @unchecked Sendable 
         let captures = debugger.captures(frameIndex: 0)
         let globals = debugger.globals().filter { !builtinGlobalNames.contains($0.name) }
 
-        // Capture the top of the VM stack — the result of the last executed expression
-        let topOfStack: Value? = (debugger as? Debugger)?.vm.stackSnapshot.last
+        // Capture the last expression result via the public API
+        let topOfStack: Value? = debugger.lastExpressionResult
 
         let snapshot = PauseSnapshot(
             location: location,
