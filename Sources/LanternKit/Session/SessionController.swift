@@ -56,12 +56,19 @@ public final class SessionController {
         case .finished:
             raw = lastResult
         default:
-            raw = lastResult // Keep showing last result while idle
+            raw = lastResult
         }
-        // Wrap View-conforming instances in ViewBox for live preview
-        guard let raw else { return nil }
-        return interpreter.wrapViewInstanceIfNeeded(raw)
+        guard let raw else { cachedPreview = nil; return nil }
+        // Cache the wrapped value to avoid recreating ViewStub/builder on every access
+        if let cached = cachedPreview, cached.source == raw {
+            return cached.wrapped
+        }
+        let wrapped = interpreter.wrapViewInstanceIfNeeded(raw)
+        cachedPreview = (source: raw, wrapped: wrapped)
+        return wrapped
     }
+
+    private var cachedPreview: (source: Value, wrapped: Value)?
 
     /// The view descriptor tree from the last view body evaluation, for hierarchy inspection.
     public private(set) var viewDescriptor: ViewDescriptor?
@@ -194,6 +201,7 @@ public final class SessionController {
         consoleEntries = []
         diagnostics = nil
         lastResult = nil
+        cachedPreview = nil
         state = .compiling
     }
 
