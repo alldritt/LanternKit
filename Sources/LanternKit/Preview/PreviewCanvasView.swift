@@ -12,22 +12,60 @@ import LanternSwiftUI
 public struct PreviewCanvasView: View {
     let result: Value?
     let error: String?
+    let viewDescriptor: ViewDescriptor?
+    let onSelectNode: (SourceLocation) -> Void
 
     @State private var canvasState = PreviewCanvasState()
 
-    public init(result: Value?, error: String? = nil) {
+    public init(result: Value?,
+                error: String? = nil,
+                viewDescriptor: ViewDescriptor? = nil,
+                onSelectNode: @escaping (SourceLocation) -> Void = { _ in })
+    {
         self.result = result
         self.error = error
+        self.viewDescriptor = viewDescriptor
+        self.onSelectNode = onSelectNode
     }
 
     public var body: some View {
         Group {
-            if let error {
-                errorView(error)
-            } else if let result {
-                resultView(result)
-            } else {
-                noResult
+            switch canvasState.mode {
+            case .preview:
+                if let error {
+                    errorView(error)
+                } else if let result {
+                    resultView(result)
+                } else {
+                    noResult
+                }
+
+            case .hierarchy:
+                HStack(spacing: 0) {
+                    ViewHierarchy3DView(
+                        descriptor: viewDescriptor,
+                        onSelectNode: onSelectNode
+                    )
+                    Divider()
+                    ViewHierarchyInspector(
+                        descriptor: viewDescriptor,
+                        onSelectNode: onSelectNode
+                    )
+                    .frame(minWidth: 200, idealWidth: 250)
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Picker("Mode", selection: $canvasState.mode) {
+                    Image(systemName: "rectangle.dashed")
+                        .help("Preview")
+                        .tag(PreviewMode.preview)
+                    Image(systemName: "square.3.layers.3d")
+                        .help("View Hierarchy")
+                        .tag(PreviewMode.hierarchy)
+                }
+                .pickerStyle(.segmented)
             }
         }
     }

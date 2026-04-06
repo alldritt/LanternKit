@@ -118,6 +118,13 @@ public enum PreviewOrientation: String, CaseIterable {
     case landscape
 }
 
+/// The preview pane's display mode.
+///
+public enum PreviewMode: String, CaseIterable {
+    case preview = "Preview"
+    case hierarchy = "View Hierarchy"
+}
+
 // MARK: - Canvas State
 
 /// Observable state for the preview canvas, shared between the toolbar and the canvas area.
@@ -125,6 +132,7 @@ public enum PreviewOrientation: String, CaseIterable {
 @Observable
 @MainActor
 public final class PreviewCanvasState {
+    public var mode: PreviewMode = .preview
     public var devicePreset: DevicePreset = .iPhone16
     public var variantMode: PreviewVariantMode = .none
     public var colorScheme: ColorScheme = .light

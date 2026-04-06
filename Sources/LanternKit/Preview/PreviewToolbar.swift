@@ -117,7 +117,7 @@ public struct PreviewToolbar: View {
             .padding(.horizontal, 4)
 
             Text("\(state.zoomPercentage)%")
-                .font(Font.system(size: 15))
+                .font(Font.system(size: 13))
                 .frame(minWidth: 36)
                 .padding(.horizontal, 4)
 
