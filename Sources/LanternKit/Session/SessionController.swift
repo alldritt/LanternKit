@@ -37,6 +37,7 @@ public final class SessionController {
 
     public private(set) var state: State = .idle
     public private(set) var consoleOutput: String = ""
+    public private(set) var consoleEntries: [ConsoleEntry] = []
     public private(set) var diagnostics: CompilerDiagnostics?
     public private(set) var currentProgram: CompiledProgram?
 
@@ -48,14 +49,18 @@ public final class SessionController {
     /// When finished: the script's final result.
     /// Otherwise: nil.
     public var previewValue: Value? {
+        let raw: Value?
         switch state {
         case .paused:
-            return debugSession.lastStatementResult
+            raw = debugSession.lastStatementResult
         case .finished:
-            return lastResult
+            raw = lastResult
         default:
-            return lastResult // Keep showing last result while idle
+            raw = lastResult // Keep showing last result while idle
         }
+        // Wrap View-conforming instances in ViewBox for live preview
+        guard let raw else { return nil }
+        return interpreter.wrapViewInstanceIfNeeded(raw)
     }
 
     public var liveReloadEnabled: Bool = true
@@ -163,6 +168,19 @@ public final class SessionController {
     /// Clear console output.
     public func clearConsole() {
         consoleOutput = ""
+        consoleEntries = []
+    }
+
+    /// Evaluate a REPL expression and append the result to the console stream.
+    public func evaluateREPL(expression: String) -> Result<Value, InterpreterError> {
+        let result = debugSession.evaluate(expression: expression)
+        switch result {
+        case .success(let value):
+            consoleEntries.append(.repl(expression: expression, result: value.debugSummary, isError: false))
+        case .failure(let error):
+            consoleEntries.append(.repl(expression: expression, result: error.message, isError: true))
+        }
+        return result
     }
 
     // MARK: - Private Execution Helpers
@@ -170,6 +188,7 @@ public final class SessionController {
     private func prepareForRun() {
         stop()
         consoleOutput = ""
+        consoleEntries = []
         diagnostics = nil
         lastResult = nil
         state = .compiling
@@ -200,15 +219,16 @@ public final class SessionController {
 
             let buffered = outputHandler.drain()
             if !buffered.isEmpty {
-                self.consoleOutput += buffered
+                self.appendOutput(buffered)
             }
 
             switch execResult {
             case .success(let value):
                 self.lastResult = value
+                self.populateGlobalsAfterExecution()
                 self.state = .finished
             case .failure(let error):
-                self.consoleOutput += "\n\(error)\n"
+                self.appendOutput("\n\(error)\n")
                 self.state = .error
             }
         }
@@ -227,7 +247,7 @@ public final class SessionController {
 
             let buffered = outputHandler.drain()
             if !buffered.isEmpty {
-                self.consoleOutput += buffered
+                self.appendOutput(buffered)
             }
 
             switch execResult {
@@ -235,10 +255,11 @@ public final class SessionController {
                 // If paused, the delegate already set state to .paused
                 if self.state != .paused {
                     self.lastResult = value
+                    self.populateGlobalsAfterExecution()
                     self.state = .finished
                 }
             case .failure(let error):
-                self.consoleOutput += "\n\(error)\n"
+                self.appendOutput("\n\(error)\n")
                 self.state = .error
             }
         }
@@ -263,6 +284,23 @@ public final class SessionController {
 
     private var outputPollTask: Task<Void, Never>?
 
+    /// Populate globals on the debug session after script execution completes,
+    /// so the Variables panel can display them.
+    private func populateGlobalsAfterExecution() {
+        let allGlobals = interpreter.debugger.globals()
+        let filtered = allGlobals.filter { !debugSession.builtinGlobalNames.contains($0.name) }
+        debugSession.setGlobals(filtered)
+    }
+
+    private func appendOutput(_ text: String) {
+        consoleOutput += text
+        // Split into lines and append as individual entries for the unified console
+        let lines = text.components(separatedBy: "\n").filter { !$0.isEmpty }
+        for line in lines {
+            consoleEntries.append(.output(text: line))
+        }
+    }
+
     private func startOutputPolling() {
         outputPollTask?.cancel()
         let outputHandler = _outputHandler
@@ -271,7 +309,7 @@ public final class SessionController {
                 try? await Task.sleep(for: .milliseconds(50))
                 let text = outputHandler.drain()
                 if !text.isEmpty {
-                    self.consoleOutput += text
+                    self.appendOutput(text)
                 }
             }
         }

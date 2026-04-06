@@ -177,6 +177,10 @@ public final class PreviewCanvasState {
     public func zoomOut() {
         scale = max(scale / 1.25, 0.1)
     }
+    
+    public func zoomActualSize() {
+        scale = 1.0
+    }
 
     public func zoomToFit(availableSize: CGSize) {
         let contentSize = estimatedContentSize

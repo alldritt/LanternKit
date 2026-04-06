@@ -26,9 +26,6 @@ public final class DebugSession {
     public private(set) var lastStatementResult: Value?
     public var selectedFrame: Int = 0
 
-    /// The canvas model for Code Bubbles visualization.
-    public let canvasModel = CanvasModel()
-
     /// Called when the debugger pauses. Used by SessionController to update state.
     public var onPause: (() -> Void)?
 
@@ -54,6 +51,11 @@ public final class DebugSession {
         self.delegateAdapter = DebugDelegateAdapter(debugger: debugger, builtinGlobalNames: builtinGlobalNames)
         self.delegateAdapter.session = self
         debugger.delegate = delegateAdapter
+    }
+
+    /// Set globals for display after script execution completes (called by SessionController).
+    func setGlobals(_ globals: [VariableInfo]) {
+        currentGlobals = globals
     }
 
     // MARK: - Execution Control
@@ -140,7 +142,6 @@ public final class DebugSession {
         currentCaptures = snapshot.captures
         currentGlobals = snapshot.globals
         lastStatementResult = snapshot.topOfStack
-        updateCanvas()
         onPause?()
     }
 
@@ -152,7 +153,6 @@ public final class DebugSession {
         currentLocals = []
         currentCaptures = []
         currentGlobals = []
-        canvasModel.dimAll()
         onResume?()
     }
 
@@ -164,14 +164,6 @@ public final class DebugSession {
         events.append(event)
     }
 
-    private func updateCanvas() {
-        // Use the already-captured call stack data, don't re-query the debugger
-        var localsMap: [Int: [VariableInfo]] = [:]
-        localsMap[0] = currentLocals
-        canvasModel.update(from: callStack) { frameIndex in
-            localsMap[frameIndex] ?? []
-        }
-    }
 }
 
 // MARK: - Pause Snapshot

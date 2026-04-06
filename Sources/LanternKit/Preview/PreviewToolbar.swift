@@ -36,6 +36,7 @@ public struct PreviewToolbar: View {
                     } label: {
                         HStack {
                             Text(preset.rawValue)
+                                .font(Font.system(size: 15))
                             if state.devicePreset == preset {
                                 Image(systemName: "checkmark")
                             }
@@ -50,6 +51,7 @@ public struct PreviewToolbar: View {
                     } label: {
                         HStack {
                             Text(preset.rawValue)
+                                .font(Font.system(size: 15))
                             if state.devicePreset == preset {
                                 Image(systemName: "checkmark")
                             }
@@ -79,7 +81,8 @@ public struct PreviewToolbar: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(maxWidth: 160)
+        .fixedSize()
+        .labelsHidden()
     }
 
     // MARK: - Zoom Controls
@@ -90,33 +93,51 @@ public struct PreviewToolbar: View {
                 state.zoomToFit(availableSize: availableSize)
             } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(Font.system(size: 15))
             }
             .help("Zoom to Fit")
+            .padding(.horizontal, 4)
 
             Button {
                 state.zoomOut()
             } label: {
                 Image(systemName: "minus.magnifyingglass")
+                    .font(Font.system(size: 15))
             }
             .help("Zoom Out")
+            .padding(.horizontal, 4)
+
+            Button {
+                state.zoomActualSize()
+            } label: {
+                Image(systemName: "1.magnifyingglass")
+                    .font(Font.system(size: 15))
+            }
+            .help("Actual Size")
+            .padding(.horizontal, 4)
 
             Text("\(state.zoomPercentage)%")
-                .font(.caption.monospacedDigit())
+                .font(Font.system(size: 15))
                 .frame(minWidth: 36)
+                .padding(.horizontal, 4)
 
             Button {
                 state.zoomIn()
             } label: {
                 Image(systemName: "plus.magnifyingglass")
+                    .font(Font.system(size: 15))
             }
             .help("Zoom In")
+            .padding(.horizontal, 4)
 
             Button {
                 state.zoomToFill(availableWidth: availableSize.width)
             } label: {
                 Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(Font.system(size: 15))
             }
             .help("Zoom to Fill")
+            .padding(.horizontal, 4)
         }
         .buttonStyle(.borderless)
         .font(.caption)
