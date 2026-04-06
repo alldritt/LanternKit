@@ -71,7 +71,10 @@ public final class SessionController {
     private var cachedPreview: (source: Value, wrapped: Value)?
 
     /// The view descriptor tree from the last view body evaluation, for hierarchy inspection.
-    public private(set) var viewDescriptor: ViewDescriptor?
+    /// Read directly from the interpreter's builder — always reflects the latest render.
+    public var viewDescriptor: ViewDescriptor? {
+        interpreter.currentViewDescriptor
+    }
 
     public var liveReloadEnabled: Bool = true
 
@@ -238,7 +241,6 @@ public final class SessionController {
                 self.lastResult = value
                 self.populateGlobalsAfterExecution()
                 self.state = .finished
-                self.scheduleDescriptorUpdate()
             case .failure(let error):
                 self.appendOutput("\n\(error)\n")
                 self.state = .error
@@ -270,7 +272,6 @@ public final class SessionController {
                     self.populateGlobalsAfterExecution()
                     self.state = .finished
                 }
-                self.scheduleDescriptorUpdate()
             case .failure(let error):
                 self.appendOutput("\n\(error)\n")
                 self.state = .error
@@ -305,14 +306,6 @@ public final class SessionController {
         debugSession.setGlobals(filtered)
     }
 
-    /// Read the view descriptor after a short delay, giving SwiftUI time to render
-    /// the ViewStub (which populates the ViewDescriptorBuilder during body evaluation).
-    private func scheduleDescriptorUpdate() {
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            self.viewDescriptor = self.interpreter.currentViewDescriptor
-        }
-    }
 
     private func appendOutput(_ text: String) {
         consoleOutput += text
