@@ -71,10 +71,7 @@ public final class SessionController {
     private var cachedPreview: (source: Value, wrapped: Value)?
 
     /// The view descriptor tree from the last view body evaluation, for hierarchy inspection.
-    /// Read directly from the interpreter's builder — always reflects the latest render.
-    public var viewDescriptor: ViewDescriptor? {
-        interpreter.currentViewDescriptor
-    }
+    public private(set) var viewDescriptor: ViewDescriptor?
 
     public var liveReloadEnabled: Bool = true
 
@@ -105,6 +102,13 @@ public final class SessionController {
         self.debugSession.onResume = { [weak self] in
             guard let self, self.state == .paused else { return }
             self.state = .running
+        }
+
+        // Update view descriptor when the ViewStub finishes body evaluation
+        interp.onViewDescriptorUpdated = { [weak self] descriptor in
+            Task { @MainActor in
+                self?.viewDescriptor = descriptor
+            }
         }
     }
 
