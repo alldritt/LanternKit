@@ -54,12 +54,9 @@ public struct PreviewDeviceFrame<Content: View>: View {
             RoundedRectangle(cornerRadius: devicePreset.cornerRadius)
                 .fill(colorScheme == .dark ? Color.black : Color.white)
 
-            // Content with safe area padding
+            // Content with safe area padding.
             VStack(spacing: 0) {
                 content()
-                    .environment(\.colorScheme, colorScheme)
-                    .environment(\.dynamicTypeSize, dynamicTypeSize)
-                    .environment(\.layoutDirection, layoutDirection)
             }
             .padding(.top, insets.top)
             .padding(.bottom, insets.bottom)
@@ -76,6 +73,10 @@ public struct PreviewDeviceFrame<Content: View>: View {
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+        // Apply environment to the entire device frame so it propagates through all content
+        .environment(\.colorScheme, colorScheme)
+        .dynamicTypeSize(dynamicTypeSize)
+        .environment(\.layoutDirection, layoutDirection)
     }
 
     // MARK: - Device Chrome Overlay

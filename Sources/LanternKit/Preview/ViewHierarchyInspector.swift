@@ -45,12 +45,19 @@ public struct ViewHierarchyInspector: View {
 /// A single node in the view descriptor tree.
 private struct DescriptorNode: View {
     let descriptor: ViewDescriptor
+    let path: String  // unique path for stable identity
     let onSelectNode: (SourceLocation) -> Void
+
+    init(descriptor: ViewDescriptor, path: String = "root", onSelectNode: @escaping (SourceLocation) -> Void) {
+        self.descriptor = descriptor
+        self.path = path
+        self.onSelectNode = onSelectNode
+    }
 
     var body: some View {
         DisclosureGroup {
             // Modifiers
-            ForEach(Array(descriptor.modifiers.enumerated()), id: \.offset) { _, modifier in
+            ForEach(Array(descriptor.modifiers.enumerated()), id: \.offset) { index, modifier in
                 HStack {
                     Image(systemName: "paintbrush")
                         .foregroundStyle(.secondary)
@@ -63,14 +70,18 @@ private struct DescriptorNode: View {
                     }
                 }
                 .padding(.leading, 8)
+                .id("\(path).mod.\(index)")
             }
 
-            // Children
-            ForEach(Array(descriptor.children.enumerated()), id: \.offset) { _, child in
+            // Children — use path-based identity so nested containers of the same type are distinct
+            ForEach(Array(descriptor.children.enumerated()), id: \.offset) { index, child in
+                let childPath = "\(path).\(index).\(child.typeName).L\(child.sourceLocation.line)"
                 DescriptorNode(
                     descriptor: child,
+                    path: childPath,
                     onSelectNode: onSelectNode
                 )
+                .id(childPath)
             }
         } label: {
             Button {

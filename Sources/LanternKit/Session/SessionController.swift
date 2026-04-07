@@ -46,29 +46,9 @@ public final class SessionController {
 
     /// The value to display in the preview panel.
     /// When paused: the result of the last executed statement.
-    /// When finished: the script's final result.
-    /// Otherwise: nil.
-    public var previewValue: Value? {
-        let raw: Value?
-        switch state {
-        case .paused:
-            raw = debugSession.lastStatementResult
-        case .finished:
-            raw = lastResult
-        default:
-            raw = lastResult
-        }
-        guard let raw else { cachedPreview = nil; return nil }
-        // Cache the wrapped value to avoid recreating ViewStub/builder on every access
-        if let cached = cachedPreview, cached.source == raw {
-            return cached.wrapped
-        }
-        let wrapped = interpreter.wrapViewInstanceIfNeeded(raw)
-        cachedPreview = (source: raw, wrapped: wrapped)
-        return wrapped
-    }
-
-    private var cachedPreview: (source: Value, wrapped: Value)?
+    /// The value to display in the preview panel, wrapped for SwiftUI rendering.
+    /// Updated explicitly when execution completes or pauses — never computed with side effects.
+    public private(set) var previewValue: Value?
 
     /// The view descriptor tree from the last view body evaluation, for hierarchy inspection.
     public private(set) var viewDescriptor: ViewDescriptor?
@@ -98,13 +78,15 @@ public final class SessionController {
         let builtinNames = Set(interp.debugger.globals().map(\.name))
 
         self.debugSession = DebugSession(debugger: interp.debugger, builtinGlobalNames: builtinNames)
-        self.debugSession.onPause = { [weak self] in self?.state = .paused }
+        self.debugSession.onPause = { [weak self] in
+            self?.state = .paused
+            self?.updatePreviewValue()
+        }
         self.debugSession.onResume = { [weak self] in
             guard let self, self.state == .paused else { return }
             self.state = .running
         }
 
-        // Update view descriptor when the ViewStub finishes body evaluation
         interp.onViewDescriptorUpdated = { [weak self] descriptor in
             Task { @MainActor in
                 self?.viewDescriptor = descriptor
@@ -208,7 +190,7 @@ public final class SessionController {
         consoleEntries = []
         diagnostics = nil
         lastResult = nil
-        cachedPreview = nil
+        previewValue = nil
         state = .compiling
     }
 
@@ -243,6 +225,7 @@ public final class SessionController {
             switch execResult {
             case .success(let value):
                 self.lastResult = value
+                self.updatePreviewValue()
                 self.populateGlobalsAfterExecution()
                 self.state = .finished
             case .failure(let error):
@@ -273,8 +256,11 @@ public final class SessionController {
                 // If paused, the delegate already set state to .paused
                 if self.state != .paused {
                     self.lastResult = value
+                    self.updatePreviewValue()
                     self.populateGlobalsAfterExecution()
                     self.state = .finished
+                } else {
+                    self.updatePreviewValue()
                 }
             case .failure(let error):
                 self.appendOutput("\n\(error)\n")
@@ -304,6 +290,19 @@ public final class SessionController {
 
     /// Populate globals on the debug session after script execution completes,
     /// so the Variables panel can display them.
+    /// Update the preview value by wrapping View instances if needed.
+    /// Called explicitly after execution results are available — not from a computed property getter.
+    private func updatePreviewValue() {
+        let raw: Value?
+        if state == .paused {
+            raw = debugSession.lastStatementResult
+        } else {
+            raw = lastResult
+        }
+        guard let raw else { previewValue = nil; return }
+        previewValue = interpreter.wrapViewInstanceIfNeeded(raw)
+    }
+
     private func populateGlobalsAfterExecution() {
         let allGlobals = interpreter.debugger.globals()
         let filtered = allGlobals.filter { !debugSession.builtinGlobalNames.contains($0.name) }

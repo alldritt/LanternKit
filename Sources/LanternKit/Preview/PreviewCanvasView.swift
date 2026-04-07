@@ -12,19 +12,21 @@ import LanternSwiftUI
 public struct PreviewCanvasView: View {
     let result: Value?
     let error: String?
-    let viewDescriptor: ViewDescriptor?
+    /// Optional session reference for reading view descriptor on demand (only in hierarchy mode).
+    /// Kept as an optional to avoid making SessionController a hard dependency of this view.
+    var session: SessionController?
     let onSelectNode: (SourceLocation) -> Void
 
     @State private var canvasState = PreviewCanvasState()
 
     public init(result: Value?,
                 error: String? = nil,
-                viewDescriptor: ViewDescriptor? = nil,
+                session: SessionController? = nil,
                 onSelectNode: @escaping (SourceLocation) -> Void = { _ in })
     {
         self.result = result
         self.error = error
-        self.viewDescriptor = viewDescriptor
+        self.session = session
         self.onSelectNode = onSelectNode
     }
 
@@ -41,18 +43,10 @@ public struct PreviewCanvasView: View {
                 }
 
             case .hierarchy:
-                HStack(spacing: 0) {
-                    ViewHierarchy3DView(
-                        descriptor: viewDescriptor,
-                        onSelectNode: onSelectNode
-                    )
-                    Divider()
-                    ViewHierarchyInspector(
-                        descriptor: viewDescriptor,
-                        onSelectNode: onSelectNode
-                    )
-                    .frame(minWidth: 200, idealWidth: 250)
-                }
+                ViewHierarchyInspector(
+                    descriptor: session?.viewDescriptor,
+                    onSelectNode: onSelectNode
+                )
             }
         }
         .toolbar {

@@ -33,7 +33,7 @@ public struct PreviewVariantsGrid<Content: View>: View {
                     layoutDirection: state.layoutDirection,
                     orientation: state.orientation,
                     label: "Light"
-                ) { content() }
+                ) { content().id("scheme-light") }
 
                 PreviewDeviceFrame(
                     devicePreset: state.devicePreset,
@@ -42,7 +42,7 @@ public struct PreviewVariantsGrid<Content: View>: View {
                     layoutDirection: state.layoutDirection,
                     orientation: state.orientation,
                     label: "Dark"
-                ) { content() }
+                ) { content().id("scheme-dark") }
             }
 
         case .orientation:
@@ -54,7 +54,7 @@ public struct PreviewVariantsGrid<Content: View>: View {
                     layoutDirection: state.layoutDirection,
                     orientation: .portrait,
                     label: "Portrait"
-                ) { content() }
+                ) { content().id("orient-portrait") }
 
                 PreviewDeviceFrame(
                     devicePreset: state.devicePreset,
@@ -63,7 +63,7 @@ public struct PreviewVariantsGrid<Content: View>: View {
                     layoutDirection: state.layoutDirection,
                     orientation: .landscape,
                     label: "Landscape"
-                ) { content() }
+                ) { content().id("orient-landscape") }
             }
 
         case .dynamicType:
@@ -99,7 +99,8 @@ public struct PreviewVariantsGrid<Content: View>: View {
                             count: 3)
 
         return LazyVGrid(columns: columns, spacing: 24) {
-            ForEach(sizes, id: \.0) { size, label in
+            ForEach(Array(sizes.enumerated()), id: \.offset) { index, pair in
+                let (size, label) = pair
                 PreviewDeviceFrame(
                     devicePreset: state.devicePreset,
                     colorScheme: state.colorScheme,
@@ -107,7 +108,7 @@ public struct PreviewVariantsGrid<Content: View>: View {
                     layoutDirection: state.layoutDirection,
                     orientation: state.orientation,
                     label: label
-                ) { content() }
+                ) { content().id("dynamicType-\(index)") }
             }
         }
     }
