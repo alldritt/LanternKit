@@ -162,10 +162,17 @@ public final class PreviewCanvasState {
         case .none:
             return device
 
-        case .colorScheme, .orientation:
-            // Two frames side by side
+        case .colorScheme:
+            // Two frames side by side, same orientation
             return CGSize(width: device.width * 2 + spacing,
                           height: device.height + labelHeight)
+
+        case .orientation:
+            // Portrait + landscape side by side
+            let portrait = devicePreset.size
+            let landscape = CGSize(width: portrait.height, height: portrait.width)
+            return CGSize(width: portrait.width + landscape.width + spacing,
+                          height: max(portrait.height, landscape.height) + labelHeight)
 
         case .dynamicType:
             // Grid: estimate 3 columns

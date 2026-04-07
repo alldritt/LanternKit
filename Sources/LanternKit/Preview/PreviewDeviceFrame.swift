@@ -54,14 +54,13 @@ public struct PreviewDeviceFrame<Content: View>: View {
             RoundedRectangle(cornerRadius: devicePreset.cornerRadius)
                 .fill(colorScheme == .dark ? Color.black : Color.white)
 
-            // Content with safe area padding.
-            VStack(spacing: 0) {
-                content()
-            }
-            .padding(.top, insets.top)
-            .padding(.bottom, insets.bottom)
-            .padding(.leading, insets.leading)
-            .padding(.trailing, insets.trailing)
+            // Content fills the device frame. NavigationStack and other containers
+            // manage their own safe area layout — we don't apply manual padding.
+            // On macOS, .dynamicTypeSize() doesn't scale fonts, so we simulate
+            // it with a scale transform relative to the default size (.large).
+            content()
+                .scaleEffect(dynamicTypeScaleFactor, anchor: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Device chrome overlay (status bar area, Dynamic Island, home indicator)
             deviceChromeOverlay
@@ -123,6 +122,28 @@ public struct PreviewDeviceFrame<Content: View>: View {
                     .frame(width: 134, height: 5)
                     .padding(.bottom, 8)
             }
+        }
+    }
+
+    // MARK: - Dynamic Type Simulation
+
+    /// Scale factor for simulating dynamic type sizes on macOS.
+    /// Based on Apple's type size scaling ratios relative to Large (the default).
+    private var dynamicTypeScaleFactor: CGFloat {
+        switch dynamicTypeSize {
+        case .xSmall:          return 0.82
+        case .small:           return 0.88
+        case .medium:          return 0.94
+        case .large:           return 1.0
+        case .xLarge:          return 1.06
+        case .xxLarge:         return 1.12
+        case .xxxLarge:        return 1.19
+        case .accessibility1:  return 1.35
+        case .accessibility2:  return 1.53
+        case .accessibility3:  return 1.79
+        case .accessibility4:  return 2.0
+        case .accessibility5:  return 2.35
+        @unknown default:      return 1.0
         }
     }
 
